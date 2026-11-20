@@ -5,10 +5,27 @@ use List::Util qw(min max);
 use File::Path qw(make_path);
 use FindBin qw($Bin);
 
-#EXIT CODES: 1 = INVALID INPUT OR CONFIGURATION, 2 = A PIPELINE STEP FAILED
+my $VERSION = '1.1.1';
+
+#RUN SUMMARY indel/<study name>.summary.tsv, WRITTEN ON SUCCESS AND ON FAILURE
+my ($summary_file,%summary);
+my @summary_keys = qw(version sample mt_reads mt_alignments split_reads clusters events_reported);
+sub write_summary{
+  my ($status,$code,$msg) = @_;
+  return unless $summary_file;
+  open(my $fh,'>',$summary_file) or return;
+  print $fh "status\t$status\nexit_code\t$code\n";
+  if(defined $msg){$msg =~ s/:\s*\n\s*/: /; $msg =~ s/\s*\n\s*/; /g; print $fh "message\t$msg\n";}
+  print $fh "$_\t$summary{$_}\n" for grep {defined $summary{$_}} @summary_keys;
+  close($fh);
+}
+
+#EXIT CODES: 1 = INVALID INPUT OR CONFIGURATION, 2 = A PIPELINE STEP FAILED,
+#3 = NO MT READS OR ALIGNMENTS LEFT AFTER A STEP (BAD INPUT OR REFERENCE, NOT A NEGATIVE RESULT)
 sub abort{
   my ($code,$msg) = @_;
   print STDERR scalar(localtime).": ERROR: $msg\n";
+  write_summary('failed',$code,$msg);
   exit $code;
 }
 
@@ -27,6 +44,24 @@ sub run{
   my $status = $rc == -1 ? "could not start: $!" : ($rc & 127) ? "killed by signal ".($rc & 127) : "exit code ".($rc >> 8);
   abort(2,"Command failed ($status): $cmd");
 }
+
+sub count_lines{
+  my ($file) = @_;
+  open(my $fh,'<',$file) or abort(2,"Cannot open $file: $!");
+  my $n = 0;
+  $n++ while <$fh>;
+  close($fh);
+  return $n;
+}
+
+sub fai_has_contig{
+  my ($fai,$contig) = @_;
+  open(my $fh,'<',$fai) or return 0;
+  while(<$fh>){return 1 if (split /\t/)[0] eq $contig;}
+  return 0;
+}
+
+if(@ARGV && $ARGV[0] eq '--version'){print "MitoSAlt $VERSION\n"; exit 0;}
 
 #INPUT
 my $config_file = $ARGV[0];
@@ -47,6 +82,8 @@ abort(1,"FASTQ file 1 not found or empty: $p1") unless -s $p1;
 abort(1,"FASTQ file 2 not found or empty: $p2") unless -s $p2;
 
 make_path(qw(bam bw indel log plot tab));
+$summary_file = "indel/$tag.summary.tsv";
+%summary = (version => $VERSION, sample => $tag);
 
 #LOG
 open(STDOUT, "| tee -ai log/$tag.log") or abort(1,"Cannot open log/$tag.log: $!");
@@ -181,6 +218,9 @@ for my $key (@files){
   if(!defined $file || $file eq ''){push @problems, "$key: missing from configuration"; next;}
   push @problems, "$key: file not found or empty: $file" unless -s $file;
 }
+#A WRONG CONTIG NAME (E.G. MT VS chrM) OTHERWISE GIVES EMPTY RESULTS WITHOUT ANY ERROR
+push @problems, "refchr '$refchr' is not a contig in $faindex" if $nu_mt eq 'yes' && -s $faindex && !fai_has_contig($faindex,$refchr);
+push @problems, "refchr '$refchr' is not a contig in $mtfaindex" if $o_mt eq 'yes' && -s $mtfaindex && !fai_has_contig($mtfaindex,$refchr);
 abort(1,"Configuration check failed:\n  ".join("\n  ",@problems)) if @problems;
 
 #MAP TO NU+MT GENOME
@@ -194,6 +234,10 @@ if($nu_mt eq 'yes' && $enriched eq 'no'){
   run("$samtools view -@ $threads -bt $faindex tmp_$tag.sam|$samtools sort -@ $threads -o tmp_$tag.bam -"); 
   run("$samtools index tmp_$tag.bam");
   run("$samtools idxstats tmp_$tag.bam > indel/$tag.count.txt");
+  open(my $idx,'<',"indel/$tag.count.txt") or abort(2,"Cannot open indel/$tag.count.txt: $!");
+  while(<$idx>){my @f = split /\t/; $summary{mt_reads} = $f[2] if $f[0] eq $refchr;}
+  close($idx);
+  abort(3,"No reads mapped to $refchr in the nuclear+MT alignment, check the input FASTQ files") unless $summary{mt_reads};
   run("$samtools view -u -@ $threads -f 12 tmp_$tag.bam > tmp1_$tag.bam"); #flag to extract unmapped reads with mate also unmapped
   run("$samtools view -u -@ $threads tmp_$tag.bam $refchr> tmp2_$tag.bam");
   run("$samtools merge -@ $threads tmp_final_$tag.bam tmp1_$tag.bam tmp2_$tag.bam");
@@ -201,6 +245,7 @@ if($nu_mt eq 'yes' && $enriched eq 'no'){
   #EXTRACT FASTQ
   print scalar(localtime).": Create FASTQ\n";
   run("$samtools fastq tmp_final_$tag.bam > tmp_$tag.fq"); #ADDS PAIR /1, /2 TO THE READ NAMES HENCE BBMAP REFORMAT NOT REQUIRED
+  abort(3,"No reads extracted for MT remapping, tmp_$tag.fq is empty") unless -s "tmp_$tag.fq";
   #system("$reformat in=tmp.fq out=tmp1.fq overwrite=true -uniquenames -Xmx100g &>> log/$tag.log");
 }
 
@@ -210,6 +255,7 @@ if($nu_mt eq 'yes' && $o_mt eq 'yes' && $enriched eq 'no'){
   run("$lastal -Q1 -e80 -P$threads $lastindex tmp_$tag.fq|$lastsp > tmp_$tag.maf");
   run("$mfcv sam -d tmp_$tag.maf|$samtools view -@ $threads -bt $mtfaindex -|$samtools sort -@ $threads -o bam/$tag.bam -");
   run("$samtools index bam/$tag.bam");
+  check_mt_bam();
   run("$mfcv tab tmp_$tag.maf > tab/$tag.tab");
 
   #COMPRESS TAB
@@ -226,9 +272,11 @@ if($nu_mt eq 'no' && $o_mt eq 'yes' && $enriched eq 'yes'){
   #REMAP ON MT GENOME
   print scalar(localtime).": Map to MT genome\n";
   run("$reformat in=$p1 in2=$p2 out=tmp_$tag.fq overwrite=true addslash=t trimreaddescription=t spaceslash=f -Xmx100g 2>> log/$tag.log");
+  abort(3,"No reads after reformatting the input FASTQ files, tmp_$tag.fq is empty") unless -s "tmp_$tag.fq";
   run("$lastal -Q1 -e80 -P$threads $lastindex tmp_$tag.fq|$lastsp > tmp_$tag.maf");
   run("$mfcv sam -d tmp_$tag.maf|$samtools view -@ $threads -bt $mtfaindex -|$samtools sort -@ $threads -o bam/$tag.bam -");
   run("$samtools index bam/$tag.bam");
+  check_mt_bam();
   run("$mfcv tab tmp_$tag.maf > tab/$tag.tab");
 
   #COMPRESS TAB
@@ -258,6 +306,7 @@ if($i_del eq 'yes'){
   my $check_paired = &check_paired($infile);
   print scalar(localtime).": Build split read hash\n";
     $hash = &build_hash($infile,$check_paired);
+  abort(3,"No alignments in $infile passed the score and e-value thresholds") unless $hash && %$hash;
   &remove_duplicates();
 
   print scalar(localtime).": Generate non-split read BED\n";
@@ -265,6 +314,7 @@ if($i_del eq 'yes'){
 
   print scalar(localtime).": Process hash to get best deletion/duplication candidates\n";
   my $delhash = &process_hash($hash,$bedfile,$breakpointfile,$msize,$tag);
+  $summary{split_reads} = count_lines($breakpointfile);
 
   print scalar(localtime).": Build split read clusters\n";
   my $clusterhash = &get_cluster($delhash,$breakthreshold,$tag);
@@ -272,10 +322,15 @@ if($i_del eq 'yes'){
   print scalar(localtime).": Generate and print results\n";
   my $clustercount = &build_results($hash,$clusterhash,$infile,$refchr,$cluster_threshold,$tag);
   &print_result($clustercount,$clusterfile);
+  $summary{clusters} = count_lines($clusterfile);
 
   #PLOT DELETIONS
   print scalar(localtime).":Plot deletions/duplications\n";
+  my $tsvfile = "indel/$tag.tsv";
+  unlink $tsvfile;
   run("Rscript '$Bin/delplot.R' $msize $orihs $orihe $orils $orile $sizelimit indel/$tag.cluster indel/$tag.breakpoint $tag $hplimit $MT_fasta $flank");
+  abort(2,"delplot.R did not write $tsvfile") unless -s $tsvfile;
+  $summary{events_reported} = count_lines($tsvfile) - 1;
 }
 
 if($rmtmp eq 'yes'){
@@ -285,8 +340,17 @@ if($rmtmp eq 'yes'){
   if($cn_mt eq 'yes'){unlink glob("tmp_random_$tag*");}
 }
 
+write_summary('ok',0);
 print scalar(localtime).":Finished\n";
 ###########################################################SUBROUTINES################################################################
+sub check_mt_bam{
+  my $n = `$samtools view -c -F 4 bam/$tag.bam`;
+  abort(2,"Command failed: $samtools view -c -F 4 bam/$tag.bam") if $?;
+  chomp($n);
+  $summary{mt_alignments} = $n;
+  abort(3,"No reads aligned to the MT genome in bam/$tag.bam") unless $n;
+}
+
 sub check_paired{
   my $check_paired = 0;
   my $path = shift;

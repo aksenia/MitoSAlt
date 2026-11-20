@@ -39,16 +39,16 @@ $ scl enable devtoolset-3 bash
 $ gcc --version
 
 Configuration:
-The main MitoSAlt script is MitoSAlt.pl (MitoSAlt_SE.pl for single end sequencing). It is dependent on a configuration file (config_<organism>.txt) to obtain the path of all programs it will use along with the parameters to classify deletions and duplications. The software paths are set by default to the bin directory in the MitoSAlt folder (where setup.sh installs all programs) and the genome directory for the human/mouse nuclear and mitochondrial genome. MitoSAlt has pre-defined configuration files for the human and mouse genomes. If the end user wants to test the software on sequencing data from another organism then the nuclear+mitochondria genome and only the mitochondria genome as separate fasta format files must be kept in the "genome" directory followed by indexing using the commands below:
+The main MitoSAlt script is MitoSAlt1.1.1.pl (MitoSAlt_SE1.1.1.pl for single end sequencing). It is dependent on a configuration file (config_<organism>.txt) to obtain the path of all programs it will use along with the parameters to classify deletions and duplications. The software paths are set by default to the bin directory in the MitoSAlt folder (where setup.sh installs all programs) and the genome directory for the human/mouse nuclear and mitochondrial genome. MitoSAlt has pre-defined configuration files for the human and mouse genomes. If the end user wants to test the software on sequencing data from another organism then the nuclear+mitochondria genome and only the mitochondria genome as separate fasta format files must be kept in the "genome" directory followed by indexing using the commands below:
 
-#FOR btindex VARIABLE IN CONFIGURATION FILE
-$ bin/hisat2/hisat2-build -p <threads> genome/<Nuclear + mitochdonria fasta file> genome/<tag for index> 
+#FOR hsindex VARIABLE IN CONFIGURATION FILE
+$ bin/hisat2/hisat2-build -p <threads> genome/<Nuclear + mitochondria fasta file> genome/<tag for index> 
 
 #FOR lastindex IN CONFIGURATION FILE
-$ bin/last/src/lastdb -uNEAR  genome/<mitochondria fasta file> genome/<tag for index> 
+$ bin/last/bin/lastdb -uNEAR  genome/<mitochondria fasta file> genome/<tag for index> 
 
 #FOR faindex IN CONFIGURATION FILE
-$ bin/samtools/samtools faidx genome/<Nuclear + mitochdonria fasta file> 
+$ bin/samtools/samtools faidx genome/<Nuclear + mitochondria fasta file> 
 
 #FOR mtfaindex IN CONFIGURATION FILE
 $ bin/samtools/samtools faidx genome/<mitochondria fasta file> 
@@ -56,17 +56,17 @@ $ bin/samtools/samtools faidx genome/<mitochondria fasta file>
 The genome size must be updated for the new organism. Further the parameters orihs, orihe, orils and orile representing the start/end of the heavy and the light strand origin need to be specified. The values can be 0 if it is not known for the organism to be used. 
 
 Running:
-The MitoSAlt.pl script takes as input the configuration file, a pair of files in fastq format (paired end sequencing) and a name specific to each run, used for the output. For each run the raw fastq files are aligned to the nuclear + mitochondrial genome, followed by extraction of the potential reads of mitochondrial origin, which are remapped on the mitochondria genome, and the results as stored in bam, bigwig and tabular format. The mapped reads in tabular format are further analyzed by the script to identify reads supporting gapped alignment on the mitochondrial genome which might represent a potential deletion and duplication. For example a default run would look like:
+The MitoSAlt1.1.1.pl script takes as input the configuration file, a pair of files in fastq format (paired end sequencing) and a name specific to each run, used for the output. For each run the raw fastq files are aligned to the nuclear + mitochondrial genome, followed by extraction of the potential reads of mitochondrial origin, which are remapped on the mitochondria genome, and the results as stored in bam, bigwig and tabular format. The mapped reads in tabular format are further analyzed by the script to identify reads supporting gapped alignment on the mitochondrial genome which might represent a potential deletion and duplication. For example a default run would look like:
 
-$ perl MitoSAlt.pl <config_file> <fastq file 1> <fastq file 2> <study name>
+$ perl MitoSAlt1.1.1.pl <config_file> <fastq file 1> <fastq file 2> <study name>
 
 The configuration file has a "steps" section which can be used to identify deletions/duplications from the same output file using different parameters. If a job is run with a study name "testrun", then the user gets the output files with "testrun" as prefix in bam, bw, indel, log and tab directories. If for the same dataset the end user wants the output at a different heteroplasmy threshold or clustering distance etc, then
 
 - edit the configuration file to introduce the new parameters under the header "SCORING AND FILTERING FEATURES"
 - change the "nu_mt", and "o_mt" parameters changed to "no" in the configuration file.
 - back up files generated in previous runs with the tag "testrun" in "indel", "plot" and "log" folders in a different folder
-- run "MitoSAlt.pl" pipeline again
-Here the script will use the LAST aligned output file "testrun.tab" generated in the previous run along with the updated parameters to generate new results. 
+- run "MitoSAlt1.1.1.pl" pipeline again
+Here the script will use the LAST aligned output file "tab/testrun.tab.gz" generated in the previous run along with the updated parameters to generate new results. 
 
 If the "enriched" step is "yes" in the configuration file, then the pipeline assumes that the reads are enriched for MtDNA and hence the "nu_mt" and "cn_mt" steps should be disabled with a "no". 
 
@@ -82,18 +82,21 @@ The output is passed to a R script "delplot.R" which filters the predicted delet
 The final output ".tsv" file (indel directory) contains the following columns
 
 sample: Name of sample
-cluster: Name of cluster grouping a set of reads with gapped alignments in a single deletion/duplication
+cluster.id: Name of cluster grouping a set of reads with gapped alignments in a single deletion/duplication
 alt.reads: Number of reads supporting breakpoints within cluster
 ref.reads: Number of wildtype reads overlapping all the breakpoints within a cluster 
 heteroplasmy: Estimated heteroplasmy
 del.start.range: Range of start positions for all the breakpoints falling within a cluster (used to plot the deletions/duplications)
 del.end.range: Range of end positions for all the breakpoints falling within a cluster (used to plot the deletions/duplications)
-delsize: Size of deletion if the reads represent a deletion
+del.size: Size of deletion if the reads represent a deletion
 final.event: Classification of the structural alteration as a deletion or duplication
 final.start: Start position based on classification
 final.end: End position based on classification
 final.size: Size of the deletion/duplication based on the final classification
 seq1: Sequence at the 5' breakpoint
 seq2: Sequence at the 3' breakpoint
-direct.repeat: Repeat sequence detected
+seq: Repeat sequence detected
 
+
+Exit codes and run summary:
+0 = finished, 1 = invalid input or configuration, 2 = a pipeline step failed, 3 = no MT reads or alignments left after a step (input or reference problem). A header-only ".tsv" file means no deletions/duplications passed the filters. Each run writes indel/<study name>.summary.tsv with the status and read, cluster and event counts. See CHANGELOG.md for details.
