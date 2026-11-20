@@ -7,7 +7,7 @@ use FindBin qw($Bin);
 
 my $VERSION = '1.1.1';
 
-#RUN SUMMARY indel/<study name>.summary.tsv, WRITTEN ON SUCCESS AND ON FAILURE
+#RUN SUMMARY log/<study name>.summary.tsv, WRITTEN ON SUCCESS AND ON FAILURE
 my ($summary_file,%summary);
 my @summary_keys = qw(version sample mt_reads mt_alignments split_reads clusters events_reported);
 sub write_summary{
@@ -84,7 +84,7 @@ abort(1,"FASTQ file 1 not found or empty: $p1") unless -s $p1;
 abort(1,"FASTQ file 2 not found or empty: $p2") unless -s $p2;
 
 make_path(qw(bam bw indel log plot tab));
-$summary_file = "indel/$tag.summary.tsv";
+$summary_file = "log/$tag.summary.tsv";
 %summary = (version => $VERSION, sample => $tag);
 
 #LOG
