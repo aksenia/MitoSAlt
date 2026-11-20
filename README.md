@@ -55,7 +55,7 @@ gcc --version
 
 ## Configuration
 
-The main MitoSAlt script is `MitoSAlt1.1.1.pl` (`MitoSAlt_SE1.1.1.pl` for single end sequencing). It is dependent on a configuration file (`config_<organism>.txt`) to obtain the path of all programs it will use along with the parameters to classify deletions and duplications. The software paths are set by default to the `bin` directory in the MitoSAlt folder (where `setup.sh` installs all programs) and the `genome` directory for the human/mouse nuclear and mitochondrial genome. MitoSAlt has pre-defined configuration files for the human and mouse genomes. If the end user wants to test the software on sequencing data from another organism then the nuclear+mitochondria genome and only the mitochondria genome as separate fasta format files must be kept in the `genome` directory followed by indexing using the commands below:
+The main MitoSAlt script is `MitoSAlt.pl` (`MitoSAlt_SE.pl` for single end sequencing). The previous names `MitoSAlt1.1.1.pl` and `MitoSAlt_SE1.1.1.pl` are kept as links for compatibility and will be removed in a future release. The version is in the `VERSION` file and is printed by `perl MitoSAlt.pl --version`. It is dependent on a configuration file (`config_<organism>.txt`) to obtain the path of all programs it will use along with the parameters to classify deletions and duplications. The software paths are set by default to the `bin` directory in the MitoSAlt folder (where `setup.sh` installs all programs) and the `genome` directory for the human/mouse nuclear and mitochondrial genome. MitoSAlt has pre-defined configuration files for the human and mouse genomes. If the end user wants to test the software on sequencing data from another organism then the nuclear+mitochondria genome and only the mitochondria genome as separate fasta format files must be kept in the `genome` directory followed by indexing using the commands below:
 
 ```bash
 # For hsindex in the configuration file
@@ -75,10 +75,10 @@ The genome size must be updated for the new organism. Further the parameters `or
 
 ## Running
 
-The `MitoSAlt1.1.1.pl` script takes as input the configuration file, a pair of files in fastq format (paired end sequencing) and a name specific to each run, used for the output. For each run the raw fastq files are aligned to the nuclear + mitochondrial genome, followed by extraction of the potential reads of mitochondrial origin, which are remapped on the mitochondria genome, and the results as stored in bam, bigwig and tabular format. The mapped reads in tabular format are further analyzed by the script to identify reads supporting gapped alignment on the mitochondrial genome which might represent a potential deletion and duplication. For example a default run would look like:
+The `MitoSAlt.pl` script takes as input the configuration file, a pair of files in fastq format (paired end sequencing) and a name specific to each run, used for the output. For each run the raw fastq files are aligned to the nuclear + mitochondrial genome, followed by extraction of the potential reads of mitochondrial origin, which are remapped on the mitochondria genome, and the results as stored in bam, bigwig and tabular format. The mapped reads in tabular format are further analyzed by the script to identify reads supporting gapped alignment on the mitochondrial genome which might represent a potential deletion and duplication. For example a default run would look like:
 
 ```bash
-perl MitoSAlt1.1.1.pl <config_file> <fastq file 1> <fastq file 2> <study name>
+perl MitoSAlt.pl <config_file> <fastq file 1> <fastq file 2> <study name>
 ```
 
 The configuration file has a "steps" section which can be used to identify deletions/duplications from the same output file using different parameters. If a job is run with a study name "testrun", then the user gets the output files with "testrun" as prefix in `bam`, `bw`, `indel`, `log` and `tab` directories. If for the same dataset the end user wants the output at a different heteroplasmy threshold or clustering distance etc, then
@@ -86,7 +86,7 @@ The configuration file has a "steps" section which can be used to identify delet
 - edit the configuration file to introduce the new parameters under the header "SCORING AND FILTERING FEATURES"
 - change the `nu_mt`, and `o_mt` parameters changed to `no` in the configuration file.
 - back up files generated in previous runs with the tag "testrun" in `indel`, `plot` and `log` folders in a different folder
-- run `MitoSAlt1.1.1.pl` pipeline again
+- run `MitoSAlt.pl` pipeline again
 
 Here the script will use the LAST aligned output file `tab/testrun.tab.gz` generated in the previous run along with the updated parameters to generate new results.
 

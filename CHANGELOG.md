@@ -1,8 +1,13 @@
 # Changelog
 
-## Unreleased
+## 1.1.2 (unreleased)
 
 Error handling and robustness. The deletion/duplication calling is unchanged.
+
+### Upgrade notes
+- Runs that fail now exit with a non-zero code (1, 2 or 3) instead of 0; wrappers that relied on exit code 0 should check it.
+- The scripts are now `MitoSAlt.pl` and `MitoSAlt_SE.pl`; `MitoSAlt1.1.1.pl` and `MitoSAlt_SE1.1.1.pl` remain as links to them.
+- The version is read from the `VERSION` file.
 
 ### Added
 - Exit codes: 0 success, 1 invalid input or configuration, 2 a pipeline step failed, 3 no MT reads or alignments left after a step.
