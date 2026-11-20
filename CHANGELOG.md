@@ -20,6 +20,6 @@ Error handling and robustness. The deletion/duplication calling is unchanged.
 
 ### Fixed
 - `insall.packages` typo in delplot.R.
-- The copy number step (cn_mt) stops with a message when no random regions are generated from `gsize` or no coverage is found for them; `bedtools groupby` reports this but exits 0, so the nuclear coverage line was silently missing from `.cnmt.txt`.
+- The copy number step (cn_mt) stops with a message when no random regions are generated from `gsize` (exit code 2) or there are no nuclear reads in them, e.g. for MT-only input (exit code 3); `bedtools groupby` reports this but exits 0, so the nuclear coverage line was silently missing from `.cnmt.txt`.
 - Host shell startup files given in `BASH_ENV`/`ENV` (e.g. an lmod setup passed through by Singularity) are no longer run for every command.
 - README: script names, the `hsindex` key, the `lastdb` path, the alignment table file name and the `.tsv` column names now match the code.

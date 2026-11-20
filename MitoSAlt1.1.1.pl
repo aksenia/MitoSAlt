@@ -297,7 +297,7 @@ if($cn_mt eq 'yes' && $enriched eq 'no' && $o_mt eq 'yes' && $nu_mt eq 'yes'){
   abort(2,"$randomBed produced no regions from $gsize, check that it lists nuclear contigs and their lengths") unless -s "tmp_random_$tag.bed";
   run("$sambamba depth region -L tmp_random_$tag.bed -t $threads -o tmp_random_$tag.cov tmp_$tag.bam");
   #BEDTOOLS GROUPBY EXITS 0 ON AN EMPTY INPUT, SO CHECK FOR COVERAGE ROWS BELOW THE HEADER
-  abort(2,"$sambamba depth region returned no coverage for the random regions, check that the contig names in $gsize match $faindex") unless count_lines("tmp_random_$tag.cov") > 1;
+  abort(3,"No nuclear reads found in the random regions used for copy number estimation: the input may contain only MT reads (then set enriched = yes, nu_mt = no and cn_mt = no), or the contig names in $gsize do not match $faindex") unless count_lines("tmp_random_$tag.cov") > 1;
   run("$groupBy -g 5 -c 8 -o mean -i tmp_random_$tag.cov >> indel/$tag.cnmt.txt");
 }
 
