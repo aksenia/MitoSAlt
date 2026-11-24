@@ -11,7 +11,7 @@ Error handling and robustness. The deletion/duplication calling is unchanged.
 
 ### Added
 - Exit codes: 0 success, 1 invalid input or configuration, 2 a pipeline step failed, 3 no MT reads or alignments left after a step.
-- `log/<study name>.summary.tsv`, written on success and on failure, one `key<TAB>value` per line: `status` (ok/failed), `exit_code`, `message` (failed runs), `version`, `sample`, `mt_reads` (reads on the MT contig in the nuclear+MT alignment), `mt_alignments` (alignments in the MT BAM), `split_reads` (lines in `.breakpoint`), `clusters` (lines in `.cluster`), `events_reported` (rows in `.tsv`). Keys for steps that did not run are omitted.
+- `log/<study name>.summary.tsv`, written on success and on failure, one `key<TAB>value` per line: `status` (running/ok/failed), `exit_code`, `message` (failed runs), `version`, `sample`, `mt_reads` (reads on the MT contig in the nuclear+MT alignment), `mt_alignments` (alignments in the MT BAM), `split_reads` (lines in `.breakpoint`), `clusters` (lines in `.cluster`), `events_reported` (rows in `.tsv`), `warnings` (Perl warnings during the run). Keys for steps that did not run are omitted.
 - The summary is written as `status running` at the start, so a killed run is recognisable; Perl errors and SIGINT/SIGTERM/SIGHUP end the run with exit code 2 and a summary.
 - The final `.tsv` is always written; a header-only file means no events passed the filters.
 - `--version` option.
@@ -22,7 +22,8 @@ Error handling and robustness. The deletion/duplication calling is unchanged.
 - Every external command is checked, with `pipefail`, and the pipeline stops on the first failure instead of finishing with exit code 0. Temporary files are kept when a run fails.
 - delplot.R is run with Rscript from the script directory; its messages go to the run log instead of delplot.Rout.
 - delplot.R stops with a message when an R package is missing instead of installing packages during a run.
-- Output directories are created automatically; STDERR is written to the run log as well.
+- Output directories are created automatically.
+- One log per run, `log/<study name>.log`, also shown on the terminal: it starts with the version, command, host and working directory and holds our messages and the output of every tool, including HISAT2 and BBMap, which previously wrote only to the file. It is overwritten by each run instead of appended to. Perl warnings are marked `WARNING:`; R warnings are printed as they occur.
 - Missing configuration or FASTQ files are reported in the log and summary.
 
 ### Fixed
