@@ -424,6 +424,12 @@ sub check_paired{
   my $path = shift;
   my $line = capture("zcat $path|tail -n 1");
   my @elements = split(/\t/, $line);
+  #PAIRED (/1, /2) OR UNPAIRED READ NAMES ARE DETECTED FROM THE LAST LINE ONLY, SO IT MUST BE AN ALIGNMENT ROW
+  if($line =~ /^#/ || $line !~ /\S/){
+    my $rows = capture("zcat $path|awk '!/^#/{n++} END{print n+0}'");
+    abort(3,"No alignments in $path") unless $rows > 0;
+  }
+  abort(2,"Cannot detect paired or unpaired read names: the last line of $path is not an alignment row") if $line =~ /^#/ || @elements < 12;
 
   $check_paired = 1 if $elements[6]=~m/\/.$/;
   return $check_paired;

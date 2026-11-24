@@ -37,5 +37,6 @@ Error handling and robustness. The deletion/duplication calling is unchanged.
 - delplot.R stops when clusters have no reads in the `.breakpoint` file instead of writing a header-only `.tsv`.
 - A `plot/<study name>.pdf` from an earlier run is removed before plotting, so it cannot be mistaken for this run's result.
 - `rmtmp = yes` removes this sample's temporary files by exact name; the previous `tmp_<study name>*` pattern also removed the files of other samples in the same directory (e.g. `S1` removed those of `S10`).
+- The run stops when the last line of `tab/<study name>.tab.gz`, from which paired or unpaired read naming is detected, is not an alignment row, instead of possibly parsing read names the wrong way.
 - Host shell startup files given in `BASH_ENV`/`ENV` (e.g. an lmod setup passed through by Singularity) are no longer run for every command.
 - README: script names, the `hsindex` key, the `lastdb` path, the alignment table file name and the `.tsv` column names now match the code.
