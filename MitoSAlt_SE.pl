@@ -147,6 +147,9 @@ abort(1,"Missing keys in $config_file: @missing") if @missing;
 for my $key (@step_keys){
   abort(1,"Key '$key' in $config_file must be 'yes' or 'no', got '$User_Preferences->{$key}'") unless $User_Preferences->{$key} =~ /^(yes|no)$/;
 }
+#NON-NUMERIC VALUES WOULD BE USED AS 0 OR A NUMERIC PREFIX WITHOUT AN ERROR
+my @not_numeric = grep {$_ ne 'refchr' && $User_Preferences->{$_} !~ /^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/} @param_keys;
+abort(1,"Keys in $config_file must be numbers: ".join(", ",map {"$_ = '$User_Preferences->{$_}'"} @not_numeric)) if @not_numeric;
 
 #PROGRAMS
 my $hisat2 = $User_Preferences->{hisat2};
