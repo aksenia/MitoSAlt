@@ -90,7 +90,7 @@ The configuration file has a "steps" section which can be used to identify delet
 
 Here the script will use the LAST aligned output file `tab/testrun.tab.gz` generated in the previous run along with the updated parameters to generate new results.
 
-If the `enriched` step is `yes` in the configuration file, then the pipeline assumes that the reads are enriched for MtDNA and hence the `nu_mt` and `cn_mt` steps should be disabled with a `no`.
+If the `enriched` step is `yes` in the configuration file, then the pipeline assumes that the reads are enriched for MtDNA and hence the `nu_mt` and `cn_mt` steps should be disabled with a `no`. In this mode BBMap `reformat` runs with a 100 GB Java heap; set the optional key `javamem = <GB>` to change it.
 
 ## Output
 

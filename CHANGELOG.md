@@ -15,6 +15,7 @@ Error handling and robustness. The deletion/duplication calling is unchanged.
 - The summary is written as `status running` at the start, so a killed run is recognisable; Perl errors and SIGINT/SIGTERM/SIGHUP end the run with exit code 2 and a summary.
 - The final `.tsv` is always written; a header-only file means no events passed the filters.
 - `--version` option.
+- Optional configuration key `javamem` (GB, default 100) for the BBMap `reformat` Java heap in enriched mode, previously fixed at 100 GB; same key as the nf-core/raredisease patch.
 - Checks before running: arguments, configuration keys, STEPS values, numeric parameter values, tools, indexes and reference files for the enabled steps, and that `refchr` is a contig in the reference indexes.
 - Optional delplot.R arguments for the plot and TSV output directories.
 
