@@ -30,6 +30,7 @@ Error handling and robustness. The deletion/duplication calling is unchanged.
 - `insall.packages` typo in delplot.R.
 - The copy number step (cn_mt) stops with a message when no random regions are generated from `gsize` (exit code 2) or there are no nuclear reads in them, e.g. for MT-only input (exit code 3); `bedtools groupby` reports this but exits 0, so the nuclear coverage line was silently missing from `.cnmt.txt`.
 - Writes of `.breakpoint`, `.bed`, `.cluster` and the temporary BED files are checked, so a full disk stops the run instead of leaving truncated files; commands whose output is read directly (`check_paired`, the MT alignment count) are checked with `pipefail` too.
+- The summary is written to a temporary file and renamed, and a failed write ends the run with an error; reading intermediate files is checked as well.
 - The copy number step stops when `sambamba depth window` writes no coverage rows.
 - delplot.R stops when clusters have no reads in the `.breakpoint` file instead of writing a header-only `.tsv`.
 - A `plot/<study name>.pdf` from an earlier run is removed before plotting, so it cannot be mistaken for this run's result.

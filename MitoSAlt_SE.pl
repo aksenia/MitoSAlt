@@ -11,23 +11,25 @@ use Sys::Hostname qw(hostname);
 my $VERSION = 'unknown';
 if(open(my $vf,'<',"$Bin/VERSION")){
   my $line = <$vf>;
-  close($vf);
+  close($vf) or undef $line;
   if(defined $line){chomp($line); $VERSION = $line if length $line;}
 }
 
 #RUN SUMMARY log/<study name>.summary.tsv, WRITTEN ON SUCCESS AND ON FAILURE
 my ($summary_file,%summary);
 my @summary_keys = qw(version sample mt_reads mt_alignments mt_mean_depth split_reads clusters events_reported warnings);
+#WRITTEN TO A TEMPORARY FILE AND RENAMED, SO A FAILED WRITE NEVER LEAVES A TRUNCATED SUMMARY; RETURNS FALSE ON FAILURE
 sub write_summary{
   my ($status,$code,$msg) = @_;
-  return unless $summary_file;
-  open(my $fh,'>',$summary_file) or return;
+  return 1 unless $summary_file;
+  my $tmp = "$summary_file.tmp";
+  open(my $fh,'>',$tmp) or return 0;
   print $fh "status\t$status\n";
   print $fh "exit_code\t$code\n" if defined $code;
   if(defined $msg){$msg =~ s/:\s*\n\s*/: /; $msg =~ s/\s*\n\s*/; /g; print $fh "message\t$msg\n";}
   print $fh "$_\t$summary{$_}\n" for grep {defined $summary{$_}} @summary_keys;
-  close($fh);
-  return;
+  close($fh) or return 0;
+  return rename($tmp,$summary_file);
 }
 
 #EXIT CODES: 1 = INVALID INPUT OR CONFIGURATION, 2 = A PIPELINE STEP FAILED,
@@ -78,7 +80,7 @@ sub count_lines{
   open(my $fh,'<',$file) or abort(2,"Cannot open $file: $!");
   my $n = 0;
   $n++ while <$fh>;
-  close($fh);
+  close($fh) or abort(2,"Cannot read $file: $!");
   return $n;
 }
 
@@ -107,7 +109,7 @@ make_path(qw(bam bw indel log plot tab));
 $summary_file = "log/$tag.summary.tsv";
 %summary = (version => $VERSION, sample => $tag, warnings => 0);
 #A SUMMARY LEFT AT "running" MEANS THE PROCESS WAS KILLED (E.G. SIGKILL BY THE OOM KILLER)
-write_summary('running');
+write_summary('running') or abort(1,"Cannot write $summary_file: $!");
 
 #ONE LOG PER RUN: OUR MESSAGES AND THE STDOUT/STDERR OF EVERY TOOL GO TO log/<study name>.log AND THE TERMINAL
 open(STDOUT,'|-','tee','-i',"log/$tag.log") or abort(1,"Cannot open log/$tag.log: $!");
@@ -140,7 +142,7 @@ while (<CONFIG>) {
     my $line = $_;
     print $line."\n";
 }
-close(CONFIG);
+close(CONFIG) or abort(1,"Cannot read configuration file $config_file: $!");
 
 my @step_keys = qw(dna enriched nu_mt rmtmp o_mt i_del cn_mt);
 my @param_keys = qw(threads refchr msize exclude orihs orihe orils orile score_threshold evalue_threshold split_length paired_distance deletion_threshold_min deletion_threshold_max breakthreshold cluster_threshold breakspan sizelimit hplimit flank split_distance_threshold);
@@ -274,7 +276,7 @@ if($nu_mt eq 'yes' && $enriched eq 'no'){
   run("$samtools idxstats tmp_$tag.bam > indel/$tag.count.txt");
   open(my $idx,'<',"indel/$tag.count.txt") or abort(2,"Cannot open indel/$tag.count.txt: $!");
   while(<$idx>){my @f = split /\t/; $summary{mt_reads} = $f[2] if $f[0] eq $refchr;}
-  close($idx);
+  close($idx) or abort(2,"Cannot read indel/$tag.count.txt: $!");
   abort(3,"No reads mapped to $refchr in the nuclear+MT alignment, check the input FASTQ file") unless $summary{mt_reads};
   run("$samtools view -u -@ $threads -f 4 tmp_$tag.bam > tmp1_$tag.bam"); #flag to extract unmapped reads
   run("$samtools view -u -@ $threads tmp_$tag.bam $refchr> tmp2_$tag.bam");
@@ -384,7 +386,7 @@ if($rmtmp eq 'yes'){
   if($cn_mt eq 'yes'){unlink glob("tmp_random_$tag*");}
 }
 
-write_summary('ok',0);
+write_summary('ok',0) or abort(2,"Cannot write $summary_file: $!");
 print scalar(localtime).":Finished\n";
 ###########################################################SUBROUTINES################################################################
 sub check_mt_bam{
@@ -402,7 +404,7 @@ sub mt_mean_depth{
   open(my $fh,'<',$bg) or abort(2,"Cannot open $bg: $!");
   my $sum = 0;
   while(<$fh>){my @f = split /\t/; $sum += ($f[2]-$f[1])*$f[3] if $f[0] eq $refchr;}
-  close($fh);
+  close($fh) or abort(2,"Cannot read $bg: $!");
   $summary{mt_mean_depth} = sprintf("%.1f",$sum/$len);
   return;
 }
@@ -1075,7 +1077,7 @@ sub get_cluster{
     my $clusterid=$fields[6];
     $bps_hash->{$readid} = $clusterid;
   }
-  close(BPS);
+  close(BPS) or abort(2,"Cannot read $bpsc: $!");
 
   open(BPE,"<$bpec") or abort(2,"Cannot open $bpec: $!");
   my @bpe=<BPE>;
@@ -1087,7 +1089,7 @@ sub get_cluster{
     my $clusterid=$fields[6];
     $bpe_hash->{$readid} = $clusterid;
   }
-  close(BPE);
+  close(BPE) or abort(2,"Cannot read $bpec: $!");
  
   for my $readid(keys %{$delhash}){
     next unless exists $bps_hash->{$readid};
@@ -1167,7 +1169,7 @@ sub build_results{
       $clustercount->{$clusterid}->{wt1}++;
       $clustercheck->{$name}++;
     }
-    close(IS);
+    close(IS) or abort(2,"Cannot read $intersectbed_fileS: $!");
     unlink $splitbed_fileS,$intersectbed_fileS;
 
     run("$intersectBed -wo -sorted -a $nosplitbed_file -b $splitbed_fileE > $intersectbed_fileE");
@@ -1187,7 +1189,7 @@ sub build_results{
       $clustercount->{$clusterid}->{wt2}++;
       $clustercheck->{$name}++;
     }
-    close(IE);
+    close(IE) or abort(2,"Cannot read $intersectbed_fileE: $!");
     unlink $splitbed_fileE,$intersectbed_fileE;
   }
   return $clustercount;
