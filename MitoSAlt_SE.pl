@@ -27,6 +27,7 @@ sub write_summary{
   if(defined $msg){$msg =~ s/:\s*\n\s*/: /; $msg =~ s/\s*\n\s*/; /g; print $fh "message\t$msg\n";}
   print $fh "$_\t$summary{$_}\n" for grep {defined $summary{$_}} @summary_keys;
   close($fh);
+  return;
 }
 
 #EXIT CODES: 1 = INVALID INPUT OR CONFIGURATION, 2 = A PIPELINE STEP FAILED,
@@ -54,6 +55,7 @@ sub run{
   delete local @ENV{qw(BASH_ENV ENV)};
   my $rc = system('bash','-o','pipefail','-c',$cmd);
   abort(2,"Command failed (".cmd_status($rc)."): $cmd") if $rc;
+  return;
 }
 
 #LIKE run() BUT RETURNS THE COMMAND OUTPUT
@@ -108,8 +110,8 @@ $summary_file = "log/$tag.summary.tsv";
 write_summary('running');
 
 #ONE LOG PER RUN: OUR MESSAGES AND THE STDOUT/STDERR OF EVERY TOOL GO TO log/<study name>.log AND THE TERMINAL
-open(STDOUT, "| tee -i log/$tag.log") or abort(1,"Cannot open log/$tag.log: $!");
-open(STDERR, ">&STDOUT") or abort(1,"Cannot redirect STDERR to log: $!");
+open(STDOUT,'|-','tee','-i',"log/$tag.log") or abort(1,"Cannot open log/$tag.log: $!");
+open(STDERR,'>&',\*STDOUT) or abort(1,"Cannot redirect STDERR to log: $!");
 $| = 1;
 print scalar(localtime).": MitoSAlt $VERSION\n";
 print "Command: $0 @ARGV\n";
@@ -390,6 +392,7 @@ sub check_mt_bam{
   chomp($n);
   $summary{mt_alignments} = $n;
   abort(3,"No reads aligned to the MT genome in bam/$tag.bam") unless $n;
+  return;
 }
 
 #MEAN DEPTH OVER THE MT CONTIG FROM THE BEDGRAPH, TO JUDGE WHETHER A RUN WITHOUT EVENTS HAD ENOUGH COVERAGE
@@ -401,6 +404,7 @@ sub mt_mean_depth{
   while(<$fh>){my @f = split /\t/; $sum += ($f[2]-$f[1])*$f[3] if $f[0] eq $refchr;}
   close($fh);
   $summary{mt_mean_depth} = sprintf("%.1f",$sum/$len);
+  return;
 }
 
 sub check_paired{
