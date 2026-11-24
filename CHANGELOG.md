@@ -29,5 +29,9 @@ Error handling and robustness. The deletion/duplication calling is unchanged.
 ### Fixed
 - `insall.packages` typo in delplot.R.
 - The copy number step (cn_mt) stops with a message when no random regions are generated from `gsize` (exit code 2) or there are no nuclear reads in them, e.g. for MT-only input (exit code 3); `bedtools groupby` reports this but exits 0, so the nuclear coverage line was silently missing from `.cnmt.txt`.
+- Writes of `.breakpoint`, `.bed`, `.cluster` and the temporary BED files are checked, so a full disk stops the run instead of leaving truncated files; commands whose output is read directly (`check_paired`, the MT alignment count) are checked with `pipefail` too.
+- The copy number step stops when `sambamba depth window` writes no coverage rows.
+- delplot.R stops when clusters have no reads in the `.breakpoint` file instead of writing a header-only `.tsv`.
+- A `plot/<study name>.pdf` from an earlier run is removed before plotting, so it cannot be mistaken for this run's result.
 - Host shell startup files given in `BASH_ENV`/`ENV` (e.g. an lmod setup passed through by Singularity) are no longer run for every command.
 - README: script names, the `hsindex` key, the `lastdb` path, the alignment table file name and the `.tsv` column names now match the code.

@@ -230,7 +230,12 @@ if(file.info(clsfile)$size>0){
     res.read.bp<-merge(res.read,bp,by="read")
     res.read.bp1<-unique(res.read.bp[,c(2,3,6)])
     
+    n.clusters<-length(unique(res$cluster))
     res<-merge(res,res.read.bp1,by=c("sample","cluster"))
+    #EVERY CLUSTER READ IS WRITTEN TO THE BREAKPOINT FILE, SO A LOST CLUSTER MEANS INCONSISTENT INPUT, NOT A NEGATIVE RESULT
+    if(length(unique(res$cluster))!=n.clusters){
+        stop(n.clusters-length(unique(res$cluster))," of ",n.clusters," clusters in ",clsfile," have no reads in ",bpfile,call.=FALSE)
+    }
     res$delsize<-res$del.end.median-res$del.start.median
     res[res$dloop=="yes",]$delsize<-(mlength-res[res$dloop=="yes",]$del.end.median)+res[res$dloop=="yes",]$del.start.median
 

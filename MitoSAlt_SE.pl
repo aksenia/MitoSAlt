@@ -53,9 +53,22 @@ sub run{
   #HOST SHELL STARTUP FILES (E.G. LMOD VIA BASH_ENV UNDER SINGULARITY) MUST NOT RUN FOR EACH COMMAND
   delete local @ENV{qw(BASH_ENV ENV)};
   my $rc = system('bash','-o','pipefail','-c',$cmd);
-  return if $rc == 0;
-  my $status = $rc == -1 ? "could not start: $!" : ($rc & 127) ? "killed by signal ".($rc & 127) : "exit code ".($rc >> 8);
-  abort(2,"Command failed ($status): $cmd");
+  abort(2,"Command failed (".cmd_status($rc)."): $cmd") if $rc;
+}
+
+#LIKE run() BUT RETURNS THE COMMAND OUTPUT
+sub capture{
+  my ($cmd) = @_;
+  delete local @ENV{qw(BASH_ENV ENV)};
+  open(my $fh,'-|','bash','-o','pipefail','-c',$cmd) or abort(2,"Command failed (could not start: $!): $cmd");
+  my $out = do {local $/; <$fh>};
+  close($fh) or abort(2,"Command failed (".cmd_status($?)."): $cmd");
+  return defined $out ? $out : '';
+}
+
+sub cmd_status{
+  my ($rc) = @_;
+  return $rc == -1 ? "could not start: $!" : ($rc & 127) ? "killed by signal ".($rc & 127) : "exit code ".($rc >> 8);
 }
 
 sub count_lines{
@@ -310,6 +323,7 @@ if($nu_mt eq 'no' && $o_mt eq 'yes' && $enriched eq 'yes'){
 
 if($cn_mt eq 'yes' && $enriched eq 'no' && $o_mt eq 'yes' && $nu_mt eq 'yes'){
   run("$sambamba depth window -w $msize bam/$tag.bam|cut -f 1,5 > indel/$tag.cnmt.txt");
+  abort(2,"$sambamba depth window wrote no coverage rows to indel/$tag.cnmt.txt") unless count_lines("indel/$tag.cnmt.txt") > 1;
   run("$randomBed -l 1000 -n 3000 -g $gsize > tmp_random_$tag.bed");
   abort(2,"$randomBed produced no regions from $gsize, check that it lists nuclear contigs and their lengths") unless -s "tmp_random_$tag.bed";
   run("$sambamba depth region -L tmp_random_$tag.bed -t $threads -o tmp_random_$tag.cov tmp_$tag.bam");
@@ -349,7 +363,8 @@ if($i_del eq 'yes'){
   #PLOT DELETIONS
   print scalar(localtime).":Plot deletions/duplications\n";
   my $tsvfile = "indel/$tag.tsv";
-  unlink $tsvfile;
+  #A PLOT FROM AN EARLIER RUN WOULD OTHERWISE REMAIN WHEN THIS RUN FINDS NO EVENTS
+  unlink $tsvfile,"plot/$tag.pdf";
   run("Rscript '$Bin/delplot.R' $msize $orihs $orihe $orils $orile $sizelimit indel/$tag.cluster indel/$tag.breakpoint $tag $hplimit $MT_fasta $flank");
   abort(2,"delplot.R did not write $tsvfile") unless -s $tsvfile;
   $summary{events_reported} = count_lines($tsvfile) - 1;
@@ -366,8 +381,7 @@ write_summary('ok',0);
 print scalar(localtime).":Finished\n";
 ###########################################################SUBROUTINES################################################################
 sub check_mt_bam{
-  my $n = `$samtools view -c -F 4 bam/$tag.bam`;
-  abort(2,"Command failed: $samtools view -c -F 4 bam/$tag.bam") if $?;
+  my $n = capture("$samtools view -c -F 4 bam/$tag.bam");
   chomp($n);
   $summary{mt_alignments} = $n;
   abort(3,"No reads aligned to the MT genome in bam/$tag.bam") unless $n;
@@ -376,7 +390,7 @@ sub check_mt_bam{
 sub check_paired{
   my $check_paired = 0;
   my $path = shift;
-  my $line = `zcat $path|tail -n 1`;
+  my $line = capture("zcat $path|tail -n 1");
   my @elements = split(/\t/, $line);
 
   $check_paired = 1 if $elements[6]=~m/\/.$/;
@@ -510,8 +524,8 @@ sub print_bed{
       print ABED "$refchr\t$start\t$end\t$name\n"; 
     }        
   }
+  close(ABED) or abort(2,"Cannot write $filename: $!");
   run("sort -k2,2n $filename -o $filename");
-  close(ABED);
   return $filename;
 }
 
@@ -600,10 +614,10 @@ sub process_hash{
       print BPE "$refchr\t$end\t$end\t$name\t0\t-\n" if $read_check eq 'yes';
     }
   }
-  close(BP);
-  close(BED);
-  close(BPS);
-  close(BPE);
+  close(BP) or abort(2,"Cannot write $breakpointfile: $!");
+  close(BED) or abort(2,"Cannot write $bedfile: $!");
+  close(BPS) or abort(2,"Cannot write $bps: $!");
+  close(BPE) or abort(2,"Cannot write $bpe: $!");
   return $delhash;
 }
 
@@ -1106,6 +1120,8 @@ sub build_results{
       print SBEDS "$refchr\t$breakstart\t$breakstart\n";
       print SBEDE "$refchr\t$breakend\t$breakend\n";
     }
+    close(SBEDS) or abort(2,"Cannot write $splitbed_fileS: $!");
+    close(SBEDE) or abort(2,"Cannot write $splitbed_fileE: $!");
 
     run("sort -u -k2,2n -k3 $splitbed_fileS -o $splitbed_fileS");
     run("sort -u -k2,2n -k3 $splitbed_fileE -o $splitbed_fileE");
@@ -1131,7 +1147,6 @@ sub build_results{
       $clustercount->{$clusterid}->{wt1}++;
       $clustercheck->{$name}++;
     }
-    close(SBEDS);
     close(IS);
     unlink $splitbed_fileS,$intersectbed_fileS;
 
@@ -1152,7 +1167,6 @@ sub build_results{
       $clustercount->{$clusterid}->{wt2}++;
       $clustercheck->{$name}++;
     }
-    close(SBEDE);
     close(IE);
     unlink $splitbed_fileE,$intersectbed_fileE;
   }
@@ -1191,5 +1205,5 @@ sub print_result{
 
     print CF "$clusterid\t$names_print\t$starts_print\t$ends_print\t$lenstarts_print\t$lenends_print\t$mt\t$mean_wt\t$perc_hp\n";
   }
-  close(CF);
+  close(CF) or abort(2,"Cannot write $clusterfile: $!");
 }
