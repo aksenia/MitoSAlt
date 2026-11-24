@@ -134,3 +134,5 @@ The final output `.tsv` file (`indel` directory) contains the following columns
 | 3 | No MT reads or alignments left after a step (input or reference problem) |
 
 A header-only `.tsv` file means no deletions/duplications passed the filters. Each run writes `log/<study name>.summary.tsv` with the status and read, cluster and event counts. See [CHANGELOG.md](CHANGELOG.md) for details.
+
+A run succeeded only if the exit code is 0 and the summary says `status ok`. A summary left at `status running` means the process was killed, e.g. by the out-of-memory killer.

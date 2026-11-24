@@ -20,7 +20,8 @@ sub write_summary{
   my ($status,$code,$msg) = @_;
   return unless $summary_file;
   open(my $fh,'>',$summary_file) or return;
-  print $fh "status\t$status\nexit_code\t$code\n";
+  print $fh "status\t$status\n";
+  print $fh "exit_code\t$code\n" if defined $code;
   if(defined $msg){$msg =~ s/:\s*\n\s*/: /; $msg =~ s/\s*\n\s*/; /g; print $fh "message\t$msg\n";}
   print $fh "$_\t$summary{$_}\n" for grep {defined $summary{$_}} @summary_keys;
   close($fh);
@@ -30,8 +31,10 @@ sub write_summary{
 #3 = NO MT READS OR ALIGNMENTS LEFT AFTER A STEP (BAD INPUT OR REFERENCE, NOT A NEGATIVE RESULT)
 sub abort{
   my ($code,$msg) = @_;
-  print STDERR scalar(localtime).": ERROR: $msg\n";
+  #SUMMARY FIRST: IF THE LOG PIPE IS GONE (E.G. TEE KILLED WITH THE JOB) THE PRINT CAN FAIL
   write_summary('failed',$code,$msg);
+  local $SIG{PIPE} = 'IGNORE';
+  print STDERR scalar(localtime).": ERROR: $msg\n";
   exit $code;
 }
 
@@ -85,18 +88,24 @@ abort(1,"Study name not given, $usage") unless $tag;
 #THE STUDY NAME IS USED UNQUOTED IN SHELL COMMANDS AND FILE NAMES
 abort(1,"Study name '$tag' may only contain letters, digits, '.', '_' and '-'") unless $tag =~ /^[\w.-]+$/;
 
-abort(1,"Configuration file not found: $config_file") unless -f $config_file;
-abort(1,"FASTQ file 1 not found or empty: $p1") unless -s $p1;
-abort(1,"FASTQ file 2 not found or empty: $p2") unless -s $p2;
-
 make_path(qw(bam bw indel log plot tab));
 $summary_file = "log/$tag.summary.tsv";
 %summary = (version => $VERSION, sample => $tag);
+#A SUMMARY LEFT AT "running" MEANS THE PROCESS WAS KILLED (E.G. SIGKILL BY THE OOM KILLER)
+write_summary('running');
 
 #LOG
 open(STDOUT, "| tee -ai log/$tag.log") or abort(1,"Cannot open log/$tag.log: $!");
 open(STDERR, ">&STDOUT") or abort(1,"Cannot redirect STDERR to log: $!");
 $| = 1;
+
+#PERL ERRORS AND TERMINATION SIGNALS ARE REPORTED AS FAILED STEPS
+$SIG{__DIE__} = sub {return if $^S; my $m = shift; chomp($m); abort(2,"Perl error: $m");};
+$SIG{$_} = sub {abort(2,"Terminated by SIG$_[0]");} for qw(INT TERM HUP);
+
+abort(1,"Configuration file not found: $config_file") unless -f $config_file;
+abort(1,"FASTQ file 1 not found or empty: $p1") unless -s $p1;
+abort(1,"FASTQ file 2 not found or empty: $p2") unless -s $p2;
 
 #LOAD CONFIGURATION FILE
 open(CONFIG, "<$config_file") or abort(1,"Cannot read configuration file $config_file: $!");
