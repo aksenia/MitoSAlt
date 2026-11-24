@@ -17,7 +17,7 @@ if(open(my $vf,'<',"$Bin/VERSION")){
 
 #RUN SUMMARY log/<study name>.summary.tsv, WRITTEN ON SUCCESS AND ON FAILURE
 my ($summary_file,%summary);
-my @summary_keys = qw(version sample mt_reads mt_alignments split_reads clusters events_reported warnings);
+my @summary_keys = qw(version sample mt_reads mt_alignments mt_mean_depth split_reads clusters events_reported warnings);
 sub write_summary{
   my ($status,$code,$msg) = @_;
   return unless $summary_file;
@@ -80,10 +80,10 @@ sub count_lines{
   return $n;
 }
 
-sub fai_has_contig{
+sub fai_contig_length{
   my ($fai,$contig) = @_;
   open(my $fh,'<',$fai) or return 0;
-  while(<$fh>){return 1 if (split /\t/)[0] eq $contig;}
+  while(<$fh>){my @f = split /\t/; return $f[1] if $f[0] eq $contig;}
   return 0;
 }
 
@@ -255,8 +255,8 @@ for my $key (@files){
   push @problems, "$key: file not found or empty: $file" unless -s $file;
 }
 #A WRONG CONTIG NAME (E.G. MT VS chrM) OTHERWISE GIVES EMPTY RESULTS WITHOUT ANY ERROR
-push @problems, "refchr '$refchr' is not a contig in $faindex" if $nu_mt eq 'yes' && -s $faindex && !fai_has_contig($faindex,$refchr);
-push @problems, "refchr '$refchr' is not a contig in $mtfaindex" if $o_mt eq 'yes' && -s $mtfaindex && !fai_has_contig($mtfaindex,$refchr);
+push @problems, "refchr '$refchr' is not a contig in $faindex" if $nu_mt eq 'yes' && -s $faindex && !fai_contig_length($faindex,$refchr);
+push @problems, "refchr '$refchr' is not a contig in $mtfaindex" if $o_mt eq 'yes' && -s $mtfaindex && !fai_contig_length($mtfaindex,$refchr);
 abort(1,"Configuration check failed:\n  ".join("\n  ",@problems)) if @problems;
 
 #MAP TO NU+MT GENOME
@@ -301,6 +301,7 @@ if($nu_mt eq 'yes' && $o_mt eq 'yes' && $enriched eq 'no'){
   print scalar(localtime).": Generate Bigwig\n";
   run("$gcov -split -ibam bam/$tag.bam -bg|sort -k1,1 -k2,2n > tmp_$tag.bg");
   run("$bg2bw tmp_$tag.bg $mtfaindex bw/$tag.bw");
+  mt_mean_depth("tmp_$tag.bg");
   unlink("tmp_$tag.bg");
 }
 
@@ -321,6 +322,7 @@ if($nu_mt eq 'no' && $o_mt eq 'yes' && $enriched eq 'yes'){
   print scalar(localtime).": Generate Bigwig\n";
   run("$gcov -split -ibam bam/$tag.bam -bg|sort -k1,1 -k2,2n > tmp_$tag.bg");
   run("$bg2bw tmp_$tag.bg $mtfaindex bw/$tag.bw");
+  mt_mean_depth("tmp_$tag.bg");
   unlink("tmp_$tag.bg");
 }
 
@@ -388,6 +390,17 @@ sub check_mt_bam{
   chomp($n);
   $summary{mt_alignments} = $n;
   abort(3,"No reads aligned to the MT genome in bam/$tag.bam") unless $n;
+}
+
+#MEAN DEPTH OVER THE MT CONTIG FROM THE BEDGRAPH, TO JUDGE WHETHER A RUN WITHOUT EVENTS HAD ENOUGH COVERAGE
+sub mt_mean_depth{
+  my ($bg) = @_;
+  my $len = fai_contig_length($mtfaindex,$refchr) or return;
+  open(my $fh,'<',$bg) or abort(2,"Cannot open $bg: $!");
+  my $sum = 0;
+  while(<$fh>){my @f = split /\t/; $sum += ($f[2]-$f[1])*$f[3] if $f[0] eq $refchr;}
+  close($fh);
+  $summary{mt_mean_depth} = sprintf("%.1f",$sum/$len);
 }
 
 sub check_paired{

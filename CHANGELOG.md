@@ -11,7 +11,7 @@ Error handling and robustness. The deletion/duplication calling is unchanged.
 
 ### Added
 - Exit codes: 0 success, 1 invalid input or configuration, 2 a pipeline step failed, 3 no MT reads or alignments left after a step.
-- `log/<study name>.summary.tsv`, written on success and on failure, one `key<TAB>value` per line: `status` (running/ok/failed), `exit_code`, `message` (failed runs), `version`, `sample`, `mt_reads` (reads on the MT contig in the nuclear+MT alignment), `mt_alignments` (alignments in the MT BAM), `split_reads` (lines in `.breakpoint`), `clusters` (lines in `.cluster`), `events_reported` (rows in `.tsv`), `warnings` (Perl warnings during the run). Keys for steps that did not run are omitted.
+- `log/<study name>.summary.tsv`, written on success and on failure, one `key<TAB>value` per line: `status` (running/ok/failed), `exit_code`, `message` (failed runs), `version`, `sample`, `mt_reads` (reads on the MT contig in the nuclear+MT alignment), `mt_alignments` (alignments in the MT BAM), `mt_mean_depth` (mean coverage of the MT contig in the MT BAM, to judge whether a run without events had enough coverage), `split_reads` (lines in `.breakpoint`), `clusters` (lines in `.cluster`), `events_reported` (rows in `.tsv`), `warnings` (Perl warnings during the run). Keys for steps that did not run are omitted.
 - The summary is written as `status running` at the start, so a killed run is recognisable; Perl errors and SIGINT/SIGTERM/SIGHUP end the run with exit code 2 and a summary.
 - The final `.tsv` is always written; a header-only file means no events passed the filters.
 - `--version` option.
